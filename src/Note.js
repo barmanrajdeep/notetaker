@@ -1,5 +1,8 @@
 import React from 'react';
 import firebase from 'firebase';
+import {throttle} from 'lodash';
+import{save,get} from './serverController.js';
+
 //https://firebase.google.com/docs/web/setup
 //https://support.google.com/firebase/answer/7015592
 const config = {
@@ -12,44 +15,71 @@ const config = {
     appId: "1:979835876948:web:026d5fcbb96bc6f7ca1fc1",
     measurementId: "G-7KE9TBESMG"
   };
+
+
 export default class Note extends React.Component {
+
     constructor(props) {
         super(props);
         this.state = {
-            value: ''
+            value: '',
+            do:null
         }
         this.newTextHander = this.newTextHander.bind(this); // https://reactjs.org/docs/forms.html#controlled-components
-    }
-    render() {
-        //https://www.w3schools.com/tags/tag_textarea.asp
-        return <div>
-            <h1>Simple note app</h1>
-            <textarea onChange={this.newTextHander} id="noteArea" rows={window.outerHeight} cols={window.innerWidth
-} value={this.state.value}> 
-            </textarea>
-        </div>;
-    }
-    newTextHander(event) {
-        console.log('getting called');
-        this.setState({ value: event.target.value}, () => firebase.database().ref('/').set({note: this.state.value}));
-    }
-    componentWillMount() {
+        this.throttledSaveToDatabase = throttle(this.saveToDatabase.bind(this), 2000);
         if (firebase.apps.length === 0) {
             firebase.initializeApp(config);
         }
     }
+
+    render() {
+        //https://www.w3schools.com/tags/tag_textarea.asp 
+        return (
+        <div>
+            <h1>{this.props.heading}</h1>
+            <p>{this.state.do===null? "" : this.state.do===true? "saved" : "saving..."}
+            </p>
+            <textarea onChange={this.newTextHander} id="noteArea" rows={window.outerHeight} cols={window.innerWidth
+} value={this.state.value}> 
+            </textarea>
+        </div>);
+    }
+
+    newTextHander(event) {
+        // throttle the save
+        this.setState({ 
+            value: event.target.value,
+            do: false
+        }, this.throttledSaveToDatabase);
+    }
+
+    saveToDatabase() {
+        var dataToSave = {note: this.state.value};
+      save(dataToSave)
+      .then(()=>{
+          this.setState({
+              do: true
+          });
+      });
+    }
+
     componentDidMount() {
         if (firebase.apps.length>0) {
             this.fetchData();
         }
     }
+
     fetchData() {
         //https://firebase.google.com/docs/database/security/quickstart
         //https://sebhastian.com/react-firebase-real-time-database-guide
         //https://firebase.google.com/docs/database/web/read-and-write#read_data_once
         //https://sebhastian.com/react-firebase-real-time-database-guide
-        return firebase.database().ref('/').once('value').then(function(snapshot) {
-            this.setState({value: snapshot.val().note})
-        }.bind(this));
+        var self = this;
+       get()
+        .then(function (data) {
+            self.setState({
+                value: data.note
+            })
+        });
     }
 }
